@@ -11,7 +11,10 @@ class Parser {
     const response = await fetch(url);
     const data = await response.text();
     // fs.writeFileSync("debug.html", data);
-    return cheerio.load(data);
+    return {
+      $: cheerio.load(data),
+      html: data
+    };
   }
   
   static async fetchItems($){
@@ -24,29 +27,27 @@ class Parser {
     return await Promise.all(items);
   }
   
-  static async fetchCategories($, url){
+  static async fetchCategories($, url, pageHtml){
     let categories = [];
-    console.log($(".sidemenu").html());
-    
-    if($(".xsubject").length){//Checkboxes
+    const ssrModelInd = pageHtml.indexOf("ssrModel");
+    const appVerionInd = pageHtml.indexOf("appVersion");
+    let str = pageHtml.substr(ssrModelInd + 9, appVerionInd - ssrModelInd - 9 - 34);
+    const ssrData = JSON.parse(str);
+    if(ssrData.model.xData.xcatalogQuery.indexOf(";") !== -1){//Checkboxes
       console.log("Checkbox page");
-      const labels = $(".xsubject fieldset label");
-      $(labels).each(function (){
-        const dv = $(this).attr('data-value');
-        const name = $(this).text();
-        let link = url;
-        if(url.indexOf("?") !== -1)
-          link += '&';
-        else link += '?';
-        link += `xsubject=${dv}`;
-        const category = new Category({
-          name: name,
-          url: link
+      const resp = await fetch(`https://wbxcatalog-ru.wildberries.ru/${ssrData.model.xData.xcatalogShard}/filters?locale=ru&filters=xsubject&${ssrData.model.xData.xcatalogQuery}`);
+      const categoriesData = await resp.json();
+      const list = categoriesData.data.filters[0].items;
+      for(let i = 0; i < list.length; i++){
+        const e = list[i];
+        let category = new Category({
+          name: e.name,
+          url: url + (url.indexOf('?') !== -1 ? '&' : '?') + "xsubject=" + e.id
         });
-        category.save();
+        await category.save();
         categories.push(category);
-      })
-    } else if($(".sidemenu li ul").length){//Just selection
+      }
+    } else if($(".sidemenu li ul li").length > 1){//Just selection
       console.log("Selection page");
       const objects = $(".sidemenu li ul li");
       $(objects).each(function (){
@@ -64,7 +65,8 @@ class Parser {
   }
   
   static async fetchItem(url){
-    const $ = await this.loadPage(url);
+    console.log(url);
+    const $ = (await this.loadPage(url)).$;
     const data = {
       name: $("span[class=brand]").text() + " / " + $(".name").text(),
       description: $(".j-description p").text(),

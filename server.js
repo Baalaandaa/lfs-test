@@ -20,11 +20,12 @@ app.post("/", (req, res) => {
         error: "no url provided"
       });
     const url = req.body.url;
-    Parser.loadPage(url).then(async $ => {
+    Parser.loadPage(url).then(async data => {
+      const $ = data.$;
       console.log("Parsing", $("h1[class=catalog-title]").text());
-      // const items = await Parser.fetchItems($);
-      // console.log(`${items.length} items fetched`);
-      const categories = await Parser.fetchCategories($, url);
+      const items = await Parser.fetchItems($);
+      console.log(`${items.length} items fetched`);
+      const categories = await Parser.fetchCategories($, url, data.html);
       console.log(`${categories.length} categories fetched`);
       res.json({
         ok: true,
